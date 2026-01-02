@@ -1,4 +1,4 @@
-# Bindy - Soundboard & Valorant GUI Overlay
+# Bindy - Soundboard
 
 **Bindy** to projekt stworzony hobbystycznie, którego głównym celem jest ułatwienie komunikacji głosowej (Soundboard) oraz dostarczenie wizualnych wskazówek w grach (głównie **Valorant**).
 
@@ -17,7 +17,7 @@ Program ten powstał w celach **edukacyjnych, humorystycznych oraz poprawiający
 2.  **System Kombinacji Klawiszy**: Dźwięki wywoływane są sekwencją dwóch klawiszy na klawiaturze numerycznej (Numpad).
 3.  **Nakładka (Overlay) GUI**:
     * Przezroczyste okno wyświetlające listę dostępnych dźwięków.
-    * Wskaźnik statusu "Spike" (dla gry Valorant) – zmienia kolory w zależności od czasu od wykrycia (Green -> Yellow -> Red).
+    * Wskaźnik statusu "Spike" (dla gry Valorant) – zmienia kolory w zależności od czasu od detonacji (zielony dużo czasu, żółty mało czasu, czerwony albo teraz albo wcale, czarny brak czasu na rozbrojenie).
 4.  **Inteligentne Wykrywanie (OpenCV)**: Automatyczna detekcja ikon na ekranie w celu aktywacji timerów (np. podłożenie bomby).
 
 ---
