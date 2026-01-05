@@ -12,9 +12,74 @@ from PyQt6.QtGui import QPainter, QColor, QPen
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QHBoxLayout, QFrame
 import sys
 import ast
-from test import WykryanieSpike
+import cv2
+import mss
 
 qDebug("Debug message")
+class WykrywanieSpike:
+    def __init__(self,wyskosc=1920, szerokosc=1080, symbol_path="spike.png", screen_region=None, threshold=0.8, czas_sprawdzania=0.5):
+        self.symbol_path = symbol_path
+        self.symbol_path = symbol_path
+
+        if screen_region is None:
+            base_w = 1920.0
+            base_h = 1080.0
+
+            sx = szerokosc / base_w
+            sy = wyskosc / base_h
+
+            self.screen_region = {
+                "top": int(0 * sy),
+                "left": int(800 * sx),
+                "width": int(300 * sx),
+                "height": int(200 * sy)
+            }
+        else:
+            self.screen_region = screen_region
+        self.threshold = threshold
+        self._status = False
+        self._stop = False
+        self._lock = threading.Lock()
+        self._thread = threading.Thread(target=self._detekcja, args=[czas_sprawdzania])
+        self._zaladuj_symbol()
+        self._thread.start()
+
+    def _zaladuj_symbol(self):
+        symbol = cv2.imread(self.symbol_path, cv2.IMREAD_UNCHANGED)
+        if symbol is None:
+            raise Exception("Nie udało się wczytać pliku spike.png")
+        if symbol.shape[2] < 4:
+            raise Exception("Symbol nie posiada kanału alfa")
+
+        self.symbol_rgb = symbol[:, :, :3]
+        symbol_alpha = symbol[:, :, 3]
+        self.mask = cv2.threshold(symbol_alpha, 1, 255, cv2.THRESH_BINARY)[1]
+        self.h, self.w = self.symbol_rgb.shape[:2]
+
+    def _detekcja(self,czas_sprawdzania):
+        with mss.mss() as sct:
+            while not self._stop:
+                screen = np.array(sct.grab(self.screen_region))[:, :, :3]
+                result = cv2.matchTemplate(screen, self.symbol_rgb, cv2.TM_CCOEFF_NORMED, mask=self.mask)
+                _, max_val, _, max_loc = cv2.minMaxLoc(result)
+
+                with self._lock:
+                    self._status = max_val >= self.threshold
+
+                time.sleep(czas_sprawdzania)
+
+    def status(self):
+        with self._lock:
+            return self._status
+
+    def czekaj_na(self):
+        while not self.status():
+            time.sleep(0.1)
+        return True
+
+    def stop(self):
+        self._stop = True
+        self._thread.join()
 
 class TransparentWindow(QWidget):
     def __init__(self):
