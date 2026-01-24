@@ -1,71 +1,75 @@
 import os
 import threading
-from pynput import mouse, keyboard as pynput_keyboard
-import keyboard as kb
-import pyaudio
-import sounddevice as sd
+import time
+import sys
+import ast
 import wave
 import numpy as np
-import time
+import mss
+import pyaudio
+import sounddevice as sd
+import keyboard as kb
+from pynput import mouse, keyboard as pynput_keyboard
 from PyQt6.QtCore import Qt, QTimer, qDebug
 from PyQt6.QtGui import QPainter, QColor, QPen
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QHBoxLayout, QFrame
-import sys
-import ast
+from ultralytics import YOLO
 import cv2
-import mss
 
 qDebug("Debug message")
+
+
 class WykrywanieSpike:
-    def __init__(self,wyskosc=1920, szerokosc=1080, symbol_path="spike.png", screen_region=None, threshold=0.8, czas_sprawdzania=0.5):
-        self.symbol_path = symbol_path
-        self.symbol_path = symbol_path
+    def __init__(self, wyskosc=1440, szerokosc=2560, model_path="best.pt", miejsce_na_ekranie=None, conf=0.6,
+                 czas_sprawdzania=0.1):
+        try:
+            self.model = YOLO(model_path)
+        except Exception as e:
+            raise Exception(f"Nie udało się załadować modelu {model_path}. Błąd: {e}")
 
-        if screen_region is None:
-            base_w = 1920.0
-            base_h = 1080.0
+        if miejsce_na_ekranie is None:
+            baza_w = 1920.0
+            baza_h = 1080.0
 
-            sx = szerokosc / base_w
-            sy = wyskosc / base_h
+            sx = szerokosc / baza_w
+            sy = wyskosc / baza_h
 
-            self.screen_region = {
+            self.miejsce_na_ekranie = {
                 "top": int(0 * sy),
-                "left": int(800 * sx),
-                "width": int(300 * sx),
-                "height": int(200 * sy)
+                "left": int(700 * sx),
+                "width": int(500 * sx),
+                "height": int(400 * sy)
             }
         else:
-            self.screen_region = screen_region
-        self.threshold = threshold
-        self._status = False
+            self.miejsce_na_ekranie = miejsce_na_ekranie
+
+        self.conf = conf
+        self._status = 0.0
         self._stop = False
         self._lock = threading.Lock()
         self._thread = threading.Thread(target=self._detekcja, args=[czas_sprawdzania])
-        self._zaladuj_symbol()
         self._thread.start()
 
-    def _zaladuj_symbol(self):
-        symbol = cv2.imread(self.symbol_path, cv2.IMREAD_UNCHANGED)
-        if symbol is None:
-            raise Exception("Nie udało się wczytać pliku spike.png")
-        if symbol.shape[2] < 4:
-            raise Exception("Symbol nie posiada kanału alfa")
-
-        self.symbol_rgb = symbol[:, :, :3]
-        symbol_alpha = symbol[:, :, 3]
-        self.mask = cv2.threshold(symbol_alpha, 1, 255, cv2.THRESH_BINARY)[1]
-        self.h, self.w = self.symbol_rgb.shape[:2]
-
-    def _detekcja(self,czas_sprawdzania):
+    def _detekcja(self, czas_sprawdzania):
         with mss.mss() as sct:
             while not self._stop:
-                screen = np.array(sct.grab(self.screen_region))[:, :, :3]
-                result = cv2.matchTemplate(screen, self.symbol_rgb, cv2.TM_CCOEFF_NORMED, mask=self.mask)
-                _, max_val, _, max_loc = cv2.minMaxLoc(result)
+                sct_img = sct.grab(self.miejsce_na_ekranie)
+                screen = np.array(sct_img)[:, :, :3]
+
+                wynik = self.model.predict(source=screen, verbose=False, conf=self.conf, imgsz=640)
+
+                szansa = 0.0
+
+                if len(wynik) > 0:
+                    obraz_podglad = wynik[0].plot()
+                    cv2.imshow("Podglad AI", obraz_podglad)
+                    cv2.waitKey(1)
+
+                    if len(wynik[0].boxes) > 0:
+                        szansa = wynik[0].boxes.conf[0].item()
 
                 with self._lock:
-                    self._status = max_val >= self.threshold
-
+                    self._status = szansa
                 time.sleep(czas_sprawdzania)
 
     def status(self):
@@ -73,50 +77,62 @@ class WykrywanieSpike:
             return self._status
 
     def czekaj_na(self):
-        while not self.status():
-            time.sleep(0.1)
+        while self.status() == 0.0:
+            time.sleep(0.05)
         return True
 
     def stop(self):
         self._stop = True
         self._thread.join()
 
+
 class TransparentWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.kolor_trojkata = QColor("#ffffff")
         self.grubosci_lini_trojkata = 0
-        self.last_key = None
+        self.ostatni_klucz = None
         self.ostatni = time.time()
         self.pierwszy_raz = True
         self.stop2 = False
         self.nadawwanie = False
         self.stan_okna = True
+        self.odliczanie_trwa = False
+
         self.start()
         self.konf_okna()
         self.sprawdzanie_spike()
-    def ustawienie_znacznika_spike(self,kolor,grubosc=5):
-        print(kolor,grubosc)
+
+    def ustawienie_znacznika_spike(self, kolor, grubosc=5):
+        print(f"Zmieniam kolor na: {kolor}, grubosc: {grubosc}")
         self.kolor_trojkata = QColor(kolor)
         self.grubosci_lini_trojkata = grubosc
         self.update()
 
+    def reset_stanu(self):
+        self.ustawienie_znacznika_spike("#ffffff", 0)
+        self.odliczanie_trwa = False
+        print("Koniec sekwencji")
+
     def sprawdz_spike(self):
+        if self.odliczanie_trwa:
+            return
+
         status = self.spike_detector.status()
-        print(status)
-        if status:
+        if status > 0:
+            print(f"Wykryto z pewnością: {status * 100:.2f}%")
+            self.odliczanie_trwa = True
+
             self.ustawienie_znacznika_spike("#00ff00")
-            time.sleep(31)
-            self.ustawienie_znacznika_spike("#e8e700")
-            time.sleep(3)
-            self.ustawienie_znacznika_spike("#ff0000")
-            time.sleep(3)
-            self.ustawienie_znacznika_spike("#000000")
-            time.sleep(7)
-            self.ustawienie_znacznika_spike("#ffffff",0)
+            QTimer.singleShot(32000, lambda: self.ustawienie_znacznika_spike("#e8e700"))
+            QTimer.singleShot(35000, lambda: self.ustawienie_znacznika_spike("#ff0000"))
+            QTimer.singleShot(38000, lambda: self.ustawienie_znacznika_spike("#000000"))
+            QTimer.singleShot(45000, lambda: self.ustawienie_znacznika_spike("#ffffff"))
+
+            QTimer.singleShot(52000, self.reset_stanu)
 
     def sprawdzanie_spike(self):
-        self.spike_detector = WykrywanieSpike(self.height(),self.width())
+        self.spike_detector = WykrywanieSpike(self.height(), self.width())
         self.timer = QTimer()
         self.timer.timeout.connect(self.sprawdz_spike)
         self.timer.start(250)
@@ -148,15 +164,23 @@ class TransparentWindow(QWidget):
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Tool
+            Qt.WindowType.Tool |
+            Qt.WindowType.WindowDoesNotAcceptFocus
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
         screen_rect = QApplication.primaryScreen().geometry()
         self.setGeometry(screen_rect)
 
-        files = [f[:2] + " " + f[2:-4] for f in os.listdir("dzwieki") if f.endswith(".wav")]
+        try:
+            files = [f[:2] + " " + f[2:-4] for f in os.listdir("dzwieki") if f.endswith(".wav")]
+        except FileNotFoundError:
+            files = []
+            print("Katalog 'dzwieki' nie istnieje.")
+
         mid = int(len(files) // 2)
         left_files = files[:mid]
         right_files = files[mid:]
@@ -183,16 +207,20 @@ class TransparentWindow(QWidget):
         left_label.setFixedWidth(200)
         left_label.setText(left_text)
         left_label.setStyleSheet("color: white;")
+        left_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
         right_label = QLabel()
+        right_label.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
         right_label.setFixedWidth(200)
         right_label.setText(right_text)
         right_label.setStyleSheet("color: white;")
+        right_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
         separator = QFrame()
         separator.setFrameShape(QFrame.Shape.VLine)
         separator.setFrameShadow(QFrame.Shadow.Sunken)
         separator.setFixedWidth(2)
+        separator.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
         gui_layout = QHBoxLayout()
         gui_layout.setContentsMargins(0, 0, 0, 0)
@@ -204,11 +232,15 @@ class TransparentWindow(QWidget):
         gui_widget = QWidget()
         gui_widget.setLayout(gui_layout)
         gui_widget.setFixedWidth(402)
+        gui_widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+        gui_widget.setStyleSheet("background-color: rgba(0, 0, 0, 25);")
 
         main_layout = QHBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
         spacer = QWidget()
+        spacer.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         main_layout.addWidget(spacer)
         main_layout.addWidget(gui_widget)
 
@@ -226,25 +258,31 @@ class TransparentWindow(QWidget):
             self.wyjsce = ustawienia[0]
             for device in sd.query_devices():
                 if device["name"] == "Line 1 (Virtual Audio Cable)" and \
-                   device["max_input_channels"] == 0 and device["max_output_channels"] == 2:
+                        device["max_input_channels"] == 0 and device["max_output_channels"] == 2:
                     self.wyjsce = device["index"]
                     print(f"Znaleziono Virtual Audio Cable o indeksie: {self.wyjsce}")
                     break
             self.volum1 = ustawienia[1]
             self.volum2 = ustawienia[2]
-        except Exception as e:
+        except Exception:
             print("Błąd wczytywania ustawień, wprowadź je ręcznie.")
-            self.wyjsce = int(input("Podaj numer urządzenia dla 'CABLE Input (VB-Audio Virtual C, MME (0 in, 2 out))': "))
+            self.wyjsce = int(
+                input("Podaj numer urządzenia dla 'CABLE Input (VB-Audio Virtual C, MME (0 in, 2 out))': "))
             self.volum1 = float(input("Moc oddtwarzania u Ciebie (0-1, 0 - WYŁĄCZONY, 1 - MAX): "))
             self.volum2 = float(input("Moc oddtwarzania u innych (0-1, 0 - WYŁĄCZONY, 1 - MAX): "))
             with open("ustawienie.txt", "w", encoding="utf-8") as f:
                 f.write(str([self.wyjsce, self.volum1, self.volum2]))
 
-        self.playlista = [f for f in os.listdir("dzwieki") if f.endswith(".wav")]
+        try:
+            self.playlista = [f for f in os.listdir("dzwieki") if f.endswith(".wav")]
+        except FileNotFoundError:
+            self.playlista = []
+            print("Nie znaleziono folderu 'dzwieki'.")
+
         try:
             with open("czestotliwosci uzytwania.txt", "r", encoding="utf-8") as f:
                 self.slownik = ast.literal_eval(f.read())
-        except Exception as e:
+        except Exception:
             print("Nie udało się wczytać 'czestotliwosci uzytwania.txt'. Inicjalizuję pusty słownik.")
             self.slownik = {}
         self.czekaj_na_klikniecie()
@@ -309,9 +347,13 @@ class TransparentWindow(QWidget):
             valid_keys = [96, 97, 98, 99, 100, 101, 102, 103, 104, 105]
             if vk in valid_keys:
                 now = time.time()
-                if now - self.ostatni < 5 and self.last_key is not None:
-                    first_index = valid_keys.index(self.last_key)
-                    second_index = valid_keys.index(vk)
+                if now - self.ostatni < 5 and self.ostatni_klucz is not None:
+                    try:
+                        first_index = valid_keys.index(self.ostatni_klucz)
+                        second_index = valid_keys.index(vk)
+                    except ValueError:
+                        return
+
                     counter = 0
                     while self.nadawwanie:
                         if counter > 20:
@@ -320,13 +362,13 @@ class TransparentWindow(QWidget):
                         counter += 1
                         time.sleep(0.1)
                         print("Próba zatrzymania odtwarzania")
-                    # Prefiks nazwy pliku oparty o numery klawiszy
+
                     key_prefix = f"{first_index}{second_index}"
                     thread = threading.Thread(target=self.play_sound, args=(key_prefix,))
                     thread.start()
-                    self.last_key = None
+                    self.ostatni_klucz = None
                 else:
-                    self.last_key = vk
+                    self.ostatni_klucz = vk
                 self.ostatni = now
         except Exception as e:
             print(f"Błąd w on_press: {e}")
@@ -339,14 +381,12 @@ class TransparentWindow(QWidget):
                 self.show()
             self.stan_okna = not self.stan_okna
 
-
     def czekaj_na_klikniecie(self):
         print("Czekam na kliknięcie klawisza. Naciśnij dowolny klawisz.")
         self.listenerM = mouse.Listener(on_click=self.on_click)
         self.listenerK = pynput_keyboard.Listener(on_release=self.on_press)
         self.listenerM.start()
         self.listenerK.start()
-
 
 
 if __name__ == "__main__":
