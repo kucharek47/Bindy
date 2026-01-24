@@ -11,7 +11,7 @@ Zaawansowana nakładka (overlay) do gry Valorant, łącząca funkcje inteligentn
     * 🟢 Zielony: Wykryto / bezpiecznie.
     * 🟡 Żółty (po 32s): Ostrzeżenie.
     * 🔴 Czerwony (po 35s): Krytyczny czas.
-    * ⚫ Czarny (po 38s): Wybuch.
+    * ⚫ Czarny (po 38s): Wybuch nie unikniony.
 
 ### 2. Soundboard z Audio Routingiem
 * Odtwarza dźwięki `.wav` z folderu `dzwieki`.
