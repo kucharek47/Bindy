@@ -1,49 +1,81 @@
-# Bindy - Soundboard
+# Bindy - Valorant AI Soundboard & Spike Detector
 
-**Bindy** to projekt stworzony hobbystycznie, którego głównym celem jest ułatwienie komunikacji głosowej (Soundboard) oraz dostarczenie wizualnych wskazówek w grach (głównie **Valorant**).
+Zaawansowana nakładka (overlay) do gry Valorant, łącząca funkcje inteligentnego soundboardu oraz asystenta wykrywania Spike'a opartego na modelu YOLO. Aplikacja działa "zawsze na wierzchu", jest przezroczysta dla kliknięć myszy i nie zakłóca rozgrywki.
 
-Mimo że nakładka graficzna (GUI) została zaprojektowana z myślą o mechanikach Valoranta (np. licznik Spike'a), sam moduł Soundboardu jest uniwersalny i działa w każdym środowisku Windows.
+## 🚀 Główne Funkcje
 
-## ⚠️ Cel Projektu
+### 1. Wykrywanie Spike'a (AI)
+* Wykorzystuje model **YOLO** (`best.pt`) do analizy obrazu w czasie rzeczywistym.
+* Automatycznie wykrywa Spike'a na ekranie (w zdefiniowanym obszarze).
+* **Wizualny Timer**: Po wykryciu Spike'a wyświetla znacznik (trójkąt), który zmienia kolory w czasie, pomagając ocenić czas do wybuchu:
+    * 🟢 Zielony: Wykryto / bezpiecznie.
+    * 🟡 Żółty (po 32s): Ostrzeżenie.
+    * 🔴 Czerwony (po 35s): Krytyczny czas.
+    * ⚫ Czarny (po 38s): Wybuch.
 
-Program ten powstał w celach **edukacyjnych, humorystycznych oraz poprawiających "Quality of Life" podczas rozgrywki**.
-**Nie służy do trollowania**, przeszkadzania innym graczom ani łamania zasad fair play. Używaj go odpowiedzialnie, aby poprawić atmosferę w drużynie, a nie ją psuć.
+### 2. Soundboard z Audio Routingiem
+* Odtwarza dźwięki `.wav` z folderu `dzwieki`.
+* **Dual Audio Output**: Dźwięk jest odtwarzany jednocześnie na:
+    * Twoich słuchawkach/głośnikach.
+    * Wirtualnym kablu (Line 1 / VB-Audio Cable) – dzięki temu słyszą go inni gracze na voice chacie.
+* **Sterowanie Klawiszami**: Uruchamianie dźwięków za pomocą sekwencji dwóch klawiszy NumPad (0-9).
+    * Np. wciśnięcie `0` a potem `1` odtworzy plik zaczynający się od `01`.
+* Automatyczne wciskanie klawisza push-to-talk (domyślnie `-`) podczas odtwarzania.
+
+### 3. Nakładka (Overlay)
+* Niewidoczna dla myszy (`TransparentForMouseEvents`) – możesz klikać "przez" okno.
+* Nie zabiera focusu z gry (`WindowDoesNotAcceptFocus`).
+* Wyświetla listę dostępnych dźwięków po lewej i prawej stronie ekranu.
+* Możliwość ukrycia/pokazania nakładki dodatkowym przyciskiem myszy (X2).
 
 ---
 
-## 🚀 Funkcjonalności
+## 🛠️ Wymagania
 
-1.  **Zaawansowany Soundboard**: Odtwarzanie plików `.wav` bezpośrednio na wejście mikrofonowe (słyszą to inni gracze) oraz na głośniki (słyszysz to Ty).
-2.  **System Kombinacji Klawiszy**: Dźwięki wywoływane są sekwencją dwóch klawiszy na klawiaturze numerycznej (Numpad).
-3.  **Nakładka (Overlay) GUI**:
-    * Przezroczyste okno wyświetlające listę dostępnych dźwięków.
-    * Wskaźnik statusu "Spike" (dla gry Valorant) – zmienia kolory w zależności od czasu od detonacji (zielony dużo czasu, żółty mało czasu, czerwony albo teraz albo wcale, czarny brak czasu na rozbrojenie).
-4.  **Inteligentne Wykrywanie (OpenCV)**: Automatyczna detekcja ikon na ekranie w celu aktywacji timerów (np. podłożenie bomby).
+1.  **Python 3.10+**
+2.  **VB-Audio Virtual Cable** (lub inny wirtualny kabel audio) – wymagane do puszczania dźwięków na mikrofon.
+3.  Zainstalowane biblioteki Python:
+    ```bash
+    pip install ultralytics opencv-python mss pyaudio sounddevice keyboard pynput PyQt6 numpy
+    ```
+4.  Plik modelu `best.pt` w głównym katalogu (wytrenowany model YOLO).
 
 ---
 
-## 🛠️ Wymagania i Instalacja
+## ⚙️ Konfiguracja
 
-Aby program działał poprawnie, musisz wykonać poniższe kroki w podanej kolejności.
+### Pierwsze uruchomienie
+Przy pierwszym uruchomieniu aplikacja poprosi w konsoli o skonfigurowanie urządzeń audio (jeśli nie znajdzie ich automatycznie). Zostanie utworzony plik `ustawienie.txt`.
 
-### 1. Wirtualny Kabel Audio (Wymagane!)
-Aby dźwięki były słyszane przez mikrofon w grze/Discordzie, musisz zainstalować wirtualne urządzenie audio.
+1.  **Urządzenie wyjściowe (Mic)**: Wybierz indeks urządzenia "CABLE Input" lub "Line 1".
+2.  **Głośność (Ty)**: 0.0 - 1.0 (np. 0.5 to 50%).
+3.  **Głośność (Inni)**: 0.0 - 1.0.
 
-1.  Pobierz i zainstaluj **VB-CABLE Virtual Audio Device**:
-    👉 [https://vb-audio.com/Cable/?gad_campaignid=266017394](https://vb-audio.com/Cable/?gad_campaignid=266017394)
-2.  Po instalacji zrestartuj komputer.
+### Pliki Dźwiękowe
+Umieść pliki `.wav` w folderze `dzwieki/`. Nazwy plików muszą zaczynać się od dwucyfrowego kodu, który będzie skrótem klawiszowym, np.:
+* `01_witam.wav` -> Uruchamiane sekwencją `NumPad 0` + `NumPad 1`.
+* `25_smiech.wav` -> Uruchamiane sekwencją `NumPad 2` + `NumPad 5`.
 
-### 2. Przygotowanie plików dźwiękowych
-Program nie zawiera wbudowanych dźwięków. Musisz dodać je sam.
+---
 
-1.  W folderze z projektem utwórz nowy katalog o nazwie: `dzwieki`.
-2.  Wgraj tam swoje pliki dźwiękowe.
-3.  **Ważne:** Pliki muszą być w formacie `.wav`.
-4.  **Nazewnictwo:** Aby przypisać dźwięk do skrótu, nazwa pliku musi zaczynać się od dwóch cyfr odpowiadających klawiszom Numpad (0-9).
-    * *Przykład:* Plik `12witam.wav` zostanie odtworzony po wciśnięciu `Numpad1`, a następnie szybko `Numpad2`.
+## 🎮 Sterowanie
 
-### 3. Instalacja Bibliotek Python
-Upewnij się, że masz zainstalowanego Pythona. Następnie zainstaluj wymagane biblioteki:
+| Klawisz / Akcja | Funkcja |
+| :--- | :--- |
+| **NumPad 0-9 (x2)** | Odtworzenie dźwięku (sekwencja dwóch cyfr). |
+| **Mouse Button X2** | Pokaż / Ukryj nakładkę. |
+| **Klawisz `-`** | Automatyczny Push-To-Talk (symulowany przez skrypt). |
 
-```bash
-pip install opencv-python numpy mss pynput keyboard pyaudio sounddevice PyQt6
+---
+
+## 📂 Struktura Plików
+
+* `BindGui.py` - Główny kod aplikacji.
+* `best.pt` - Model AI do detekcji.
+* `dzwieki/` - Folder z plikami `.wav`.
+* `ustawienie.txt` - Zapisana konfiguracja audio (generowany automatycznie).
+* `czestotliwosci uzytwania.txt` - Statystyki użycia dźwięków (generowany automatycznie).
+
+## ⚠️ Uwagi
+* Aplikacja korzysta z `mss` do zrzutów ekranu, co jest bardzo szybkie i mało obciążające.
+* Upewnij się, że gra działa w trybie **"Okno bez ramek" (Borderless Window)** lub "W oknie", aby nakładka była widoczna nad grą.
