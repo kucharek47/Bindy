@@ -165,7 +165,8 @@ class TransparentWindow(QWidget):
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint |
             Qt.WindowType.Tool |
-            Qt.WindowType.WindowDoesNotAcceptFocus
+            Qt.WindowType.WindowDoesNotAcceptFocus |
+            Qt.WindowType.WindowTransparentForInput
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
