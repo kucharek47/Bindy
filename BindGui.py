@@ -15,6 +15,8 @@ from PyQt6.QtGui import QPainter, QColor, QPen
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QHBoxLayout, QFrame
 from ultralytics import YOLO
 import cv2
+from dotenv import load_dotenv
+
 
 qDebug("Debug message")
 
@@ -249,30 +251,47 @@ class TransparentWindow(QWidget):
 
     def start(self):
         self.con = pynput_keyboard.Controller()
-        print("Dostępne urządzenia audio:")
-        print(sd.query_devices())
+        qd = sd.query_devices()
+        self.wyjscie = None
+        for x in qd:
+            if (x["name"] == "CABLE Input (VB-Audio Virtual C" or x["name"] == "Line 1 (Virtual Audio Cable)") and x["max_input_channels"] == 0 and x["max_output_channels"] > 2:
+                self.wyjscie = x["index"]
+        if not self.wyjscie:
+            print("Pobierz wirualny mikrofon np VB-Audio i wybierz urzadzenie wyjsciowe")
+            print(sd.query_devices())
+            self.wyjscie = int(input("Podaj numer: "))
 
-        try:
-            with open("ustawienie.txt", "r", encoding="utf-8") as f:
-                ustawienia = ast.literal_eval(f.read())
-            print("Ustawienia załadowane. Jeśli zmieni się liczba urządzeń, usuń plik ustawienie.txt.")
-            self.wyjsce = ustawienia[0]
-            for device in sd.query_devices():
-                if device["name"] == "Line 1 (Virtual Audio Cable)" and \
-                        device["max_input_channels"] == 0 and device["max_output_channels"] == 2:
-                    self.wyjsce = device["index"]
-                    print(f"Znaleziono Virtual Audio Cable o indeksie: {self.wyjsce}")
+        if os.path.exists(".env"):
+            def get_env(nazwa):
+                try:
+                    return float(os.getenv(nazwa))
+                except (TypeError, ValueError):
+                    while True:
+                        try:
+                            return float(input(f"Moc oddtwarzania dla {nazwa} (0-1, 0 - WYŁĄCZONY, 1 - MAX): "))
+                        except ValueError:
+                            print("Błąd: Wprowadzona wartość musi być liczbą zmiennoprzecinkową lub całkowitą.")
+            load_dotenv()
+            self.volum1 = get_env("VOL_USER")
+            self.volum2 = get_env("VOL_VIRUAL")
+        else:
+            while True:
+                try:
+                    self.volum1 = float(input("Moc oddtwarzania u Ciebie (0-1, 0 - WYŁĄCZONY, 1 - MAX): "))
                     break
-            self.volum1 = ustawienia[1]
-            self.volum2 = ustawienia[2]
-        except Exception:
-            print("Błąd wczytywania ustawień, wprowadź je ręcznie.")
-            self.wyjsce = int(
-                input("Podaj numer urządzenia dla 'CABLE Input (VB-Audio Virtual C, MME (0 in, 2 out))': "))
-            self.volum1 = float(input("Moc oddtwarzania u Ciebie (0-1, 0 - WYŁĄCZONY, 1 - MAX): "))
-            self.volum2 = float(input("Moc oddtwarzania u innych (0-1, 0 - WYŁĄCZONY, 1 - MAX): "))
-            with open("ustawienie.txt", "w", encoding="utf-8") as f:
-                f.write(str([self.wyjsce, self.volum1, self.volum2]))
+                except ValueError:
+                    print("Błąd: Wprowadzona wartość musi być liczbą zmiennoprzecinkową lub całkowitą.")
+
+            while True:
+                try:
+                    self.volum2 = float(input("Moc oddtwarzania u innych (0-1, 0 - WYŁĄCZONY, 1 - MAX): "))
+                    break
+                except ValueError:
+                    print("Błąd: Wprowadzona wartość musi być liczbą zmiennoprzecinkową lub całkowitą.")
+
+            with open(".env", "w", encoding="utf-8") as plik_env:
+                plik_env.write(f"VOL_USER={self.volum1}\n")
+                plik_env.write(f"VOL_VIRUAL={self.volum2}\n")
 
         try:
             self.playlista = [f for f in os.listdir("dzwieki") if f.endswith(".wav")]
